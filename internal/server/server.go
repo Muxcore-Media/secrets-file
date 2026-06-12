@@ -1,17 +1,20 @@
 package server
 
 import (
-	"encoding/json"
-	"fmt"
+	"context"
 	"log/slog"
-	"net/http"
-	"strings"
 	"sync/atomic"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	secretsv1 "github.com/Muxcore-Media/core/proto/gen/muxcore/secrets/v1"
 	"github.com/Muxcore-Media/secrets-file/internal/vault"
 )
 
 type Server struct {
+	secretsv1.UnimplementedSecretsServiceServer
 	vault      *vault.Vault
 	getCount   atomic.Int64
 	setCount   atomic.Int64
@@ -22,112 +25,52 @@ func New(v *vault.Vault) *Server {
 	return &Server{vault: v}
 }
 
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/secrets/", s.handleKey)
-	mux.HandleFunc("/v1/secrets", s.handleList)
-	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/metrics", s.handleMetrics)
-	return mux
+func (s *Server) RegisterWithGRPC(srv *grpc.Server) {
+	secretsv1.RegisterSecretsServiceServer(srv, s)
 }
 
-func (s *Server) handleKey(w http.ResponseWriter, r *http.Request) {
-	key := strings.TrimPrefix(r.URL.Path, "/v1/secrets/")
-	key = strings.TrimSuffix(key, "/")
-	if key == "" {
-		http.Error(w, `{"error":"key is required"}`, http.StatusBadRequest)
-		return
+func (s *Server) Get(ctx context.Context, req *secretsv1.GetRequest) (*secretsv1.GetResponse, error) {
+	if req.GetKey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-
-	switch r.Method {
-	case http.MethodGet:
-		s.handleGet(w, r, key)
-	case http.MethodPut:
-		s.handleSet(w, r, key)
-	case http.MethodDelete:
-		s.handleDelete(w, r, key)
-	default:
-		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-	}
-}
-
-func (s *Server) handleGet(w http.ResponseWriter, r *http.Request, key string) {
-	val, err := s.vault.Get(r.Context(), key)
+	val, err := s.vault.Get(ctx, req.GetKey())
 	if err != nil {
-		if err == vault.ErrNotFound {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusNotFound)
-			return
-		}
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		slog.Error("secrets: get failed", "key", key, "error", err)
-		return
+		slog.Error("secrets: get failed", "key", req.GetKey(), "error", err)
+		return nil, status.Error(codes.NotFound, err.Error())
 	}
 	s.getCount.Add(1)
-	writeJSON(w, http.StatusOK, map[string]string{"key": key, "value": val})
+	return &secretsv1.GetResponse{Key: req.GetKey(), Value: val}, nil
 }
 
-func (s *Server) handleSet(w http.ResponseWriter, r *http.Request, key string) {
-	var req struct {
-		Value string `json:"value"`
+func (s *Server) Set(ctx context.Context, req *secretsv1.SetRequest) (*secretsv1.SetResponse, error) {
+	if req.GetKey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
-	}
-	if err := s.vault.Set(r.Context(), key, req.Value); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		slog.Error("secrets: set failed", "key", key, "error", err)
-		return
+	if err := s.vault.Set(ctx, req.GetKey(), req.GetValue()); err != nil {
+		slog.Error("secrets: set failed", "key", req.GetKey(), "error", err)
+		return nil, status.Error(codes.Internal, "set failed")
 	}
 	s.setCount.Add(1)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	return &secretsv1.SetResponse{Status: "ok"}, nil
 }
 
-func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, key string) {
-	if err := s.vault.Delete(r.Context(), key); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		slog.Error("secrets: delete failed", "key", key, "error", err)
-		return
+func (s *Server) Delete(ctx context.Context, req *secretsv1.DeleteRequest) (*secretsv1.DeleteResponse, error) {
+	if req.GetKey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "key is required")
+	}
+	if err := s.vault.Delete(ctx, req.GetKey()); err != nil {
+		slog.Error("secrets: delete failed", "key", req.GetKey(), "error", err)
+		return nil, status.Error(codes.Internal, "delete failed")
 	}
 	s.delCount.Add(1)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	return &secretsv1.DeleteResponse{Status: "ok"}, nil
 }
 
-func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-	keys, err := s.vault.List(r.Context())
+func (s *Server) List(ctx context.Context, req *secretsv1.ListRequest) (*secretsv1.ListResponse, error) {
+	keys, err := s.vault.List(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		slog.Error("secrets: list failed", "error", err)
-		return
+		return nil, status.Error(codes.Internal, "list failed")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"keys": keys, "count": len(keys)})
-}
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	var b strings.Builder
-	b.WriteString("# HELP secrets_get_total Total secret get operations\n")
-	b.WriteString("# TYPE secrets_get_total counter\n")
-	fmt.Fprintf(&b, "secrets_get_total %d\n", s.getCount.Load())
-	b.WriteString("# HELP secrets_set_total Total secret set operations\n")
-	b.WriteString("# TYPE secrets_set_total counter\n")
-	fmt.Fprintf(&b, "secrets_set_total %d\n", s.setCount.Load())
-	b.WriteString("# HELP secrets_delete_total Total secret delete operations\n")
-	b.WriteString("# TYPE secrets_delete_total counter\n")
-	fmt.Fprintf(&b, "secrets_delete_total %d\n", s.delCount.Load())
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	w.Write([]byte(b.String()))
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	return &secretsv1.ListResponse{Keys: keys, Count: int32(len(keys))}, nil
 }

@@ -137,7 +137,6 @@ func (v *Vault) Close() {
 	for k := range v.entries {
 		delete(v.entries, k)
 	}
-	v.mu.Unlock()
 }
 
 func (v *Vault) persist() error {
