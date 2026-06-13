@@ -1,9 +1,9 @@
 FROM golang:1.26-alpine AS builder
-WORKDIR /build
-COPY go.mod go.sum ./
+COPY core/ /build/core/
+COPY secrets-file/ /build/secrets-file/
+WORKDIR /build/secrets-file
 RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /build/secrets-file ./cmd/module
+RUN CGO_ENABLED=0 go build -o /secrets-file ./cmd/module
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=builder /build/secrets-file /
+COPY --from=builder /secrets-file /
 ENTRYPOINT ["/secrets-file"]
