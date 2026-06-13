@@ -140,13 +140,12 @@ func (v *Vault) Close() {
 }
 
 func (v *Vault) persist() error {
-	v.mu.RLock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	if !v.dirty || v.path == "" {
-		v.mu.RUnlock()
 		return nil
 	}
 	data, err := json.MarshalIndent(v.entries, "", "  ")
-	v.mu.RUnlock()
 	if err != nil {
 		return fmt.Errorf("marshal secrets: %w", err)
 	}
@@ -160,9 +159,7 @@ func (v *Vault) persist() error {
 		return fmt.Errorf("rename secrets: %w", err)
 	}
 
-	v.mu.Lock()
 	v.dirty = false
-	v.mu.Unlock()
 	return nil
 }
 
