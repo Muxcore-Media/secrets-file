@@ -5,5 +5,6 @@
   "author": "MuxCore",
   "roles": ["security"],
   "capabilities": ["secrets"],
-  "contracts": []
+  "contracts": [{"repo": "github.com/Muxcore-Media/core/pkg/contracts", "interface": "SecretsProvider", "version": "v0.4.0"}],
+  "minCoreVersion": "0.4.0"
 }

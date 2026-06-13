@@ -15,10 +15,10 @@ import (
 
 type Server struct {
 	secretsv1.UnimplementedSecretsServiceServer
-	vault      *vault.Vault
-	getCount   atomic.Int64
-	setCount   atomic.Int64
-	delCount   atomic.Int64
+	vault    *vault.Vault
+	getCount atomic.Int64
+	setCount atomic.Int64
+	delCount atomic.Int64
 }
 
 func New(v *vault.Vault) *Server {

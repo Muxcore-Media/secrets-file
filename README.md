@@ -1,116 +1,28 @@
-# Your Module
+# Secrets File
 
-[![CI](https://github.com/yourorg/your-module/actions/workflows/ci.yml/badge.svg)](https://github.com/yourorg/your-module/actions)
-[![Go Version](https://img.shields.io/badge/Go-1.26-blue)](https://go.dev/)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+AES-256-GCM encrypted file-backed secrets vault for MuxCore.
 
-**One-line description of what your module does.**
-
-A MuxCore sidecar module that does X. Without this module, core can't do Y.
-
----
-
-## How It Works
-
-```
-Client request ──→ your-module ──→ muxcored
-                     │
-                     ▼
-              Does the thing
-```
-
-### Key concept 1
-
-Explanation.
-
-### Key concept 2
-
-Explanation.
-
----
+Stores secrets encrypted at rest using AES-256-GCM with a 32-byte master key. Secrets are persisted to a JSON file. The master key can be provided via file or environment variable; if neither exists, a new key is auto-generated.
 
 ## Configuration
 
-### CLI Flags
+| Env / Flag | Default | Description |
+|---|---|---|
+| `SECRETS_MASTER_KEY` | — | Hex-encoded 32-byte master key (overrides key file) |
+| `SECRETS_KEY_FILE` / `--key-file` | — | Path to master key file (auto-generated if missing) |
+| `SECRETS_STORE` / `--store` | `secrets.json` | Path to encrypted secrets store |
+| `SECRETS_GRPC_ADDR` / `--grpc-addr` | `:9500` | gRPC listen address |
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--flag-name` | value | Description |
+## RPCs
 
-### Environment Variables
+- `Get(key)` — retrieve a decrypted secret
+- `Set(key, value)` — encrypt and store a secret
+- `Delete(key)` — remove a secret
+- `List()` — list all secret keys (no values exposed)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `YOUR_MODULE_ADDR` | `:9400` | Listen address |
+## Security
 
----
-
-## Quick Start
-
-```bash
-# Build
-make build
-
-# Run against local core (dev mode)
-export MUXCORE_INSECURE_DISABLE_TLS=true
-./your-module --muxcore-mesh-addr localhost:9090
-```
-
----
-
-## Deployment
-
-### Docker
-
-```bash
-make docker
-docker run -d --restart=unless-stopped \
-  -e MUXCORE_GRPC_ADDR=core:9090 \
-  ghcr.io/yourorg/your-module:latest
-```
-
-### docker-compose
-
-```bash
-docker compose -f deploy/docker-compose.yml up
-```
-
-### systemd
-
-```bash
-sudo cp deploy/systemd/muxcore-module.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now muxcore-module
-```
-
----
-
-## Development
-
-```bash
-make dev      # run in dev mode
-make test     # run tests
-make lint     # golangci-lint
-make fmt      # format code
-```
-
-### Integration Tests
-
-```bash
-# Start core in dev mode, then:
-MUXCORE_GRPC_ADDR=localhost:9090 go test -tags=integration -race -count=1 ./test/
-```
-
----
-
-## Implementation
-
-- Registers with capabilities: `"your.capability"`
-- Implements `contracts.YourContract`
-- Uses `contracts.DatabaseProvider` for persistence
-
----
-
-## License
-
-GPL-3.0
+- AES-256-GCM encryption with random nonces
+- Master key must be exactly 32 bytes (64 hex chars)
+- Secrets flushed to disk atomically (temp file + rename)
+- Secrets cleared from memory on `Close()`

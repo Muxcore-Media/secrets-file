@@ -73,7 +73,11 @@ func (m *Module) Info() contracts.ModuleInfo {
 		Description:  "AES-256-GCM encrypted file-backed secrets vault",
 		Author:       "MuxCore",
 		Capabilities: []string{contracts.CapabilitySecrets},
-		HTTPAddr:     m.grpcAddr,
+		Contracts: []contracts.ContractDeclaration{
+			{Repo: "github.com/Muxcore-Media/core/pkg/contracts", Interface: "SecretsProvider", Version: "v0.4.0"},
+		},
+		MinCoreVersion: "0.4.0",
+		HTTPAddr:       m.grpcAddr,
 	}
 }
 
