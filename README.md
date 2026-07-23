@@ -16,7 +16,7 @@ A MuxCore sidecar module that stores secrets in a local JSON file, encrypting ea
 Module request ──→ secrets-file (gRPC) ──→ AES-256-GCM vault ──→ secrets.json
 ```
 
-Each secret is stored as `{nonce, ciphertext}`. The master key never leaves the process; values are decrypted only on `Get`.
+Each secret is stored as `{"n": <nonce>, "d": <ciphertext>}`. The master key never leaves the process; values are decrypted only on `Get`.
 
 ---
 
@@ -34,7 +34,7 @@ Each secret is stored as `{nonce, ciphertext}`. The master key never leaves the 
 ## Quick Start
 
 ```bash
-make build
+go build -o secrets-file ./cmd/module
 
 export MUXCORE_INSECURE_DISABLE_TLS=true
 export SECRETS_MASTER_KEY="$(openssl rand -hex 32)"

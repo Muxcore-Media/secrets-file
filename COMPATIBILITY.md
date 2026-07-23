@@ -6,11 +6,11 @@
 |----------------|-------------|--------|
 | v0.1.0         | v0.4.0+     | Current |
 
-## Contracts
+## Capabilities
 
-| Contract | Capability | Status |
-|----------|-----------|--------|
-| —        | —         | Planned |
+| Capability | Status  |
+|------------|---------|
+| `secrets`  | Current |
 
 ## Breaking Changes
 
