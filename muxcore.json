@@ -3,7 +3,12 @@
   "description": "AES-256-GCM encrypted file-backed secrets vault",
   "version": "0.1.0",
   "author": "MuxCore",
-  "roles": ["security"],
-  "capabilities": ["secrets"],
+  "roles": [
+    "security"
+  ],
+  "capabilities": [
+    "secrets",
+    "secrets.file"
+  ],
   "contracts": []
 }

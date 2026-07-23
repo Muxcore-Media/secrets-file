@@ -1,4 +1,4 @@
-# Contributing to Your Module
+# Contributing to Secrets File Vault
 
 ## Development Setup
 
@@ -10,9 +10,9 @@
 ### Clone and build
 
 ```bash
-git clone https://github.com/yourorg/your-module.git
-cd your-module
-make build
+git clone https://github.com/Muxcore-Media/secrets-file.git
+cd secrets-file
+go build -o secrets-file ./cmd/module
 ```
 
 ### Run against a local muxcored
@@ -23,7 +23,8 @@ cd ../core
 MUXCORE_INSECURE_DISABLE_TLS=true ./muxcored
 
 # Terminal 2: start module
-make build && ./your-module --muxcore-mesh-addr localhost:9090
+go build -o secrets-file ./cmd/module
+./secrets-file --muxcore-mesh-addr localhost:9090
 ```
 
 ## Running Tests
@@ -60,10 +61,10 @@ refactor/<short-description>
 
 ## Pull Request Process
 
-1. Branch from `main`.
+1. Branch from `master`.
 2. Make your changes with tests.
 3. Run `make ci` locally — it must pass.
-4. Open a PR against `main`.
+4. Open a PR against `master`.
 5. Squash-merge preferred.
 
 ## Security Vulnerabilities

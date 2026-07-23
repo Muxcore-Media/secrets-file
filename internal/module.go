@@ -72,7 +72,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 		Roles:        []string{"security"},
 		Description:  "AES-256-GCM encrypted file-backed secrets vault",
 		Author:       "MuxCore",
-		Capabilities: []string{contracts.CapabilitySecrets},
+		Capabilities: []string{contracts.CapabilitySecrets, "secrets.file"},
 		HTTPAddr:     m.grpcAddr,
 	}
 }
