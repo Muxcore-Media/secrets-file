@@ -27,7 +27,7 @@ Each secret is stored as `{"n": <nonce>, "d": <ciphertext>}`. The master key nev
 | `SECRETS_MASTER_KEY` | `` | Hex-encoded 32-byte master key (takes precedence) |
 | `SECRETS_KEY_FILE` | `` | Path to hex-encoded master key file (auto-created if missing) |
 | `SECRETS_STORE` | `secrets.json` | Encrypted secrets store path |
-| `SECRETS_GRPC_ADDR` | `:9500` | gRPC listen address |
+| `SECRETS_GRPC_ADDR` | `:9550` | gRPC listen address |
 
 ---
 
