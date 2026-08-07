@@ -45,7 +45,7 @@ func NewModule(cfg Config) *Module {
 		cfg.Store = "secrets.json"
 	}
 	if cfg.GRPCAddr == "" {
-		cfg.GRPCAddr = ":9500"
+		cfg.GRPCAddr = ":9550"
 	}
 	if v := os.Getenv("SECRETS_STORE"); v != "" {
 		cfg.Store = v
