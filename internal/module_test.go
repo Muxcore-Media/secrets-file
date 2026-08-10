@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -34,5 +35,29 @@ func TestModuleLifecycle(t *testing.T) {
 	}
 	if err := m.Stop(ctx); err != nil {
 		t.Fatalf("Stop: %v", err)
+	}
+}
+
+func TestKeyAndStorePermissions(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "master.key")
+	store := filepath.Join(dir, "secrets.json")
+	m := NewModule(Config{KeyFile: keyFile, Store: store, GRPCAddr: ":0"})
+	ctx := context.Background()
+	if err := m.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{keyFile, store} {
+		st, err := os.Stat(path)
+		if err != nil {
+			// store may be created lazily on first Set
+			if path == store && os.IsNotExist(err) {
+				continue
+			}
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != 0o600 {
+			t.Fatalf("%s mode %o, want 0600", path, st.Mode().Perm())
+		}
 	}
 }
