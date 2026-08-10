@@ -10,10 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"google.golang.org/grpc"
 
 	"github.com/Muxcore-Media/core/pkg/contracts"
+	modulesdk "github.com/Muxcore-Media/core/sdk/go/module"
 	"github.com/Muxcore-Media/secrets-file/internal/server"
 	"github.com/Muxcore-Media/secrets-file/internal/vault"
 )
@@ -25,6 +27,7 @@ type Module struct {
 	lis     net.Listener
 
 	id       string
+	cfgMu    sync.RWMutex
 	store    string
 	keyFile  string
 	grpcAddr string
@@ -68,7 +71,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Secrets File Vault",
-		Version:      "0.1.4",
+		Version:      "0.1.5",
 		Roles:        []string{"security"},
 		Description:  "AES-256-GCM encrypted file-backed secrets vault",
 		Author:       "MuxCore",
@@ -103,6 +106,7 @@ func (m *Module) Init(ctx context.Context) error {
 func (m *Module) Start(ctx context.Context) error {
 	m.grpcSrv = grpc.NewServer()
 	m.srv.RegisterWithGRPC(m.grpcSrv)
+	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 
 	go func() {
 		slog.Info("secrets-file gRPC service started", "addr", m.grpcAddr)
