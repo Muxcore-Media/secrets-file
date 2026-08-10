@@ -68,7 +68,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Secrets File Vault",
-		Version:      "0.1.3",
+		Version:      "0.1.4",
 		Roles:        []string{"security"},
 		Description:  "AES-256-GCM encrypted file-backed secrets vault",
 		Author:       "MuxCore",
