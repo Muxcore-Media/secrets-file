@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.1.6] — 2026-08-10
+
+### Changed
+
+- Advertise `settings` capability for admin-ui Settings discovery
+
 ## [0.1.4] — 2026-08-10
 
 ### Fixed
