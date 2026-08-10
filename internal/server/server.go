@@ -15,14 +15,25 @@ import (
 
 type Server struct {
 	secretsv1.UnimplementedSecretsServiceServer
-	vault      *vault.Vault
-	getCount   atomic.Int64
-	setCount   atomic.Int64
-	delCount   atomic.Int64
+	vaultPtr atomic.Pointer[vault.Vault]
+	getCount atomic.Int64
+	setCount atomic.Int64
+	delCount atomic.Int64
 }
 
 func New(v *vault.Vault) *Server {
-	return &Server{vault: v}
+	s := &Server{}
+	s.vaultPtr.Store(v)
+	return s
+}
+
+// ReplaceVault swaps the backing vault. Returns the previous vault (caller should Flush/Close).
+func (s *Server) ReplaceVault(v *vault.Vault) *vault.Vault {
+	return s.vaultPtr.Swap(v)
+}
+
+func (s *Server) vault() *vault.Vault {
+	return s.vaultPtr.Load()
 }
 
 func (s *Server) RegisterWithGRPC(srv *grpc.Server) {
@@ -33,7 +44,7 @@ func (s *Server) Get(ctx context.Context, req *secretsv1.GetRequest) (*secretsv1
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	val, err := s.vault.Get(ctx, req.GetKey())
+	val, err := s.vault().Get(ctx, req.GetKey())
 	if err != nil {
 		slog.Error("secrets: get failed", "key", req.GetKey(), "error", err)
 		return nil, status.Error(codes.NotFound, err.Error())
@@ -46,7 +57,7 @@ func (s *Server) Set(ctx context.Context, req *secretsv1.SetRequest) (*secretsv1
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	if err := s.vault.Set(ctx, req.GetKey(), req.GetValue()); err != nil {
+	if err := s.vault().Set(ctx, req.GetKey(), req.GetValue()); err != nil {
 		slog.Error("secrets: set failed", "key", req.GetKey(), "error", err)
 		return nil, status.Error(codes.Internal, "set failed")
 	}
@@ -58,7 +69,7 @@ func (s *Server) Delete(ctx context.Context, req *secretsv1.DeleteRequest) (*sec
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	if err := s.vault.Delete(ctx, req.GetKey()); err != nil {
+	if err := s.vault().Delete(ctx, req.GetKey()); err != nil {
 		slog.Error("secrets: delete failed", "key", req.GetKey(), "error", err)
 		return nil, status.Error(codes.Internal, "delete failed")
 	}
@@ -67,7 +78,7 @@ func (s *Server) Delete(ctx context.Context, req *secretsv1.DeleteRequest) (*sec
 }
 
 func (s *Server) List(ctx context.Context, req *secretsv1.ListRequest) (*secretsv1.ListResponse, error) {
-	keys, err := s.vault.List(ctx)
+	keys, err := s.vault().List(ctx)
 	if err != nil {
 		slog.Error("secrets: list failed", "error", err)
 		return nil, status.Error(codes.Internal, "list failed")
