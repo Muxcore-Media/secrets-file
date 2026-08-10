@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-08-10
+
+### Added
+
+- Test that master key (and store when present) are created `0600`
+
+
 ## [0.1.0]
 
 ### Added
