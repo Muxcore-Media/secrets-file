@@ -1,14 +1,15 @@
 {
   "name": "Secrets File Vault",
   "description": "AES-256-GCM encrypted file-backed secrets vault",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": "MuxCore",
   "roles": [
     "security"
   ],
   "capabilities": [
     "secrets",
-    "secrets.file"
+    "secrets.file",
+    "settings"
   ],
   "contracts": []
 }
