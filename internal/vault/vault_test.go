@@ -69,8 +69,12 @@ func TestDelete(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	v.Set(ctx, "key1", "val1")
-	v.Set(ctx, "key2", "val2")
+	if err := v.Set(ctx, "key1", "val1"); err != nil {
+		t.Fatalf("Set key1: %v", err)
+	}
+	if err := v.Set(ctx, "key2", "val2"); err != nil {
+		t.Fatalf("Set key2: %v", err)
+	}
 
 	if err := v.Delete(ctx, "key1"); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -97,9 +101,15 @@ func TestList(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	v.Set(ctx, "a", "1")
-	v.Set(ctx, "b", "2")
-	v.Set(ctx, "c", "3")
+	if err := v.Set(ctx, "a", "1"); err != nil {
+		t.Fatalf("Set a: %v", err)
+	}
+	if err := v.Set(ctx, "b", "2"); err != nil {
+		t.Fatalf("Set b: %v", err)
+	}
+	if err := v.Set(ctx, "c", "3"); err != nil {
+		t.Fatalf("Set c: %v", err)
+	}
 
 	keys, err := v.List(ctx)
 	if err != nil {
@@ -173,9 +183,13 @@ func TestTamperedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	v.Set(ctx, "key", "value")
+	if err := v.Set(ctx, "key", "value"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
 
-	os.WriteFile(path, []byte(`{"key":{"n":"AAAAAAAAAAAAAAAAAAAAAA","d":"BBBB"}}`), 0600)
+	if err := os.WriteFile(path, []byte(`{"key":{"n":"AAAAAAAAAAAAAAAAAAAAAA","d":"BBBB"}}`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	v2, err := New(path, masterKey(t))
 	if err != nil {
@@ -195,8 +209,12 @@ func TestOverwrite(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	v.Set(ctx, "key", "value1")
-	v.Set(ctx, "key", "value2")
+	if err := v.Set(ctx, "key", "value1"); err != nil {
+		t.Fatalf("Set value1: %v", err)
+	}
+	if err := v.Set(ctx, "key", "value2"); err != nil {
+		t.Fatalf("Set value2: %v", err)
+	}
 
 	val, err := v.Get(ctx, "key")
 	if err != nil {
@@ -216,7 +234,9 @@ func TestUniqueNonces(t *testing.T) {
 
 	nonces := make(map[string]bool)
 	for i := 0; i < 10; i++ {
-		v.Set(ctx, fmt.Sprintf("key%d", i), "value")
+		if err := v.Set(ctx, fmt.Sprintf("key%d", i), "value"); err != nil {
+			t.Fatalf("Set key%d: %v", i, err)
+		}
 	}
 
 	v.mu.RLock()
