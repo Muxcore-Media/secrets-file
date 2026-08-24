@@ -92,7 +92,7 @@ func (m *Module) setPaths(store string, keyFile *string) error {
 	m.store = newStore
 	m.keyFile = newKey
 	if old != nil {
-		old.Flush()
+		_ = old.Flush()
 		old.Close()
 	}
 	return nil

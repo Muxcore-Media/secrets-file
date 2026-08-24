@@ -122,7 +122,7 @@ func (m *Module) Stop(ctx context.Context) error {
 		m.grpcSrv.GracefulStop()
 	}
 	if m.vault != nil {
-		m.vault.Flush()
+		_ = m.vault.Flush()
 		m.vault.Close()
 	}
 	slog.Info("secrets-file stopped")

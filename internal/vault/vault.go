@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	ErrNotFound     = errors.New("secret not found")
-	ErrKeyRequired  = errors.New("master key is required; set SECRETS_MASTER_KEY env var or provide a key file")
-	ErrKeySize      = errors.New("master key must be exactly 32 bytes for AES-256")
-	ErrEmptyKey     = errors.New("secret key must not be empty")
+	ErrNotFound    = errors.New("secret not found")
+	ErrKeyRequired = errors.New("master key is required; set SECRETS_MASTER_KEY env var or provide a key file")
+	ErrKeySize     = errors.New("master key must be exactly 32 bytes for AES-256")
+	ErrEmptyKey    = errors.New("secret key must not be empty")
 )
 
 type SecretEntry struct {
@@ -28,11 +28,11 @@ type SecretEntry struct {
 }
 
 type Vault struct {
-	mu       sync.RWMutex
-	path     string
-	master   []byte
-	entries  map[string]SecretEntry
-	dirty    bool
+	mu      sync.RWMutex
+	path    string
+	master  []byte
+	entries map[string]SecretEntry
+	dirty   bool
 }
 
 func New(path string, masterKey []byte) (*Vault, error) {
@@ -156,7 +156,7 @@ func (v *Vault) persist() error {
 		return fmt.Errorf("write secrets tmp: %w", err)
 	}
 	if err := os.Rename(tmp, v.path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("rename secrets: %w", err)
 	}
 
