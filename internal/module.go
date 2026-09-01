@@ -26,18 +26,21 @@ type Module struct {
 	grpcSrv *grpc.Server
 	lis     net.Listener
 
-	id       string
-	cfgMu    sync.RWMutex
-	store    string
-	keyFile  string
-	grpcAddr string
+	id          string
+	cfgMu       sync.RWMutex
+	store       string
+	keyFile     string
+	grpcAddr    string
+	allowedRoot string
+	moduleToken string
 }
 
 type Config struct {
-	ID       string
-	Store    string
-	KeyFile  string
-	GRPCAddr string
+	ID          string
+	Store       string
+	KeyFile     string
+	GRPCAddr    string
+	ModuleToken string
 }
 
 func NewModule(cfg Config) *Module {
@@ -48,7 +51,7 @@ func NewModule(cfg Config) *Module {
 		cfg.Store = "secrets.json"
 	}
 	if cfg.GRPCAddr == "" {
-		cfg.GRPCAddr = ":9550"
+		cfg.GRPCAddr = "127.0.0.1:9550"
 	}
 	if v := os.Getenv("SECRETS_STORE"); v != "" {
 		cfg.Store = v
@@ -59,11 +62,18 @@ func NewModule(cfg Config) *Module {
 	if v := os.Getenv("SECRETS_GRPC_ADDR"); v != "" {
 		cfg.GRPCAddr = v
 	}
+	if cfg.ModuleToken == "" {
+		cfg.ModuleToken = moduleTokenFromEnv()
+	}
+	cfg.Store = absPath(cfg.Store)
+	cfg.KeyFile = absPath(cfg.KeyFile)
 	return &Module{
-		id:       cfg.ID,
-		store:    cfg.Store,
-		keyFile:  cfg.KeyFile,
-		grpcAddr: cfg.GRPCAddr,
+		id:          cfg.ID,
+		store:       cfg.Store,
+		keyFile:     cfg.KeyFile,
+		grpcAddr:    cfg.GRPCAddr,
+		allowedRoot: resolveAllowedRoot(cfg.Store, cfg.KeyFile),
+		moduleToken: cfg.ModuleToken,
 	}
 }
 
@@ -71,17 +81,29 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Secrets File Vault",
-		Version:      "0.1.6",
+		Version:      Version,
 		Roles:        []string{"security"},
 		Description:  "AES-256-GCM encrypted file-backed secrets vault",
 		Author:       "MuxCore",
 		Capabilities: []string{contracts.CapabilitySecrets, "secrets.file", "settings"},
-		HTTPAddr:     m.grpcAddr,
 	}
 }
 
 func (m *Module) Init(ctx context.Context) error {
-	masterKey, err := loadMasterKey(m.keyFile)
+	m.store = absPath(m.store)
+	m.keyFile = absPath(m.keyFile)
+	m.allowedRoot = resolveAllowedRoot(m.store, m.keyFile)
+
+	if err := validateStoragePath(m.allowedRoot, m.store); err != nil {
+		return fmt.Errorf("store path: %w", err)
+	}
+	if m.keyFile != "" {
+		if err := validateStoragePath(m.allowedRoot, m.keyFile); err != nil {
+			return fmt.Errorf("key file path: %w", err)
+		}
+	}
+
+	masterKey, err := loadMasterKey(m.keyFile, true)
 	if err != nil {
 		return fmt.Errorf("load master key: %w", err)
 	}
@@ -104,7 +126,7 @@ func (m *Module) Init(ctx context.Context) error {
 }
 
 func (m *Module) Start(ctx context.Context) error {
-	m.grpcSrv = grpc.NewServer()
+	m.grpcSrv = grpc.NewServer(grpc.UnaryInterceptor(authUnaryInterceptor(m.moduleToken)))
 	m.srv.RegisterWithGRPC(m.grpcSrv)
 	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 
@@ -133,52 +155,112 @@ func (m *Module) Health(ctx context.Context) error {
 	if m.vault == nil {
 		return fmt.Errorf("not initialized")
 	}
-	_, err := m.vault.List(ctx)
-	return err
+	if err := m.vault.VerifyAll(ctx); err != nil {
+		return err
+	}
+	if m.srv != nil {
+		return m.srv.Health(ctx)
+	}
+	return nil
 }
 
-func loadMasterKey(path string) ([]byte, error) {
+func absPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return filepath.Clean(p)
+}
+
+func loadMasterKey(path string, persistEnvToFile bool) ([]byte, error) {
 	envKey := os.Getenv("SECRETS_MASTER_KEY")
 	if envKey != "" {
-		key, err := hex.DecodeString(envKey)
+		key, err := decodeHexKey(envKey, "SECRETS_MASTER_KEY")
 		if err != nil {
-			return nil, fmt.Errorf("SECRETS_MASTER_KEY must be hex-encoded 32 bytes: %w", err)
+			return nil, err
 		}
-		if len(key) != 32 {
-			return nil, fmt.Errorf("SECRETS_MASTER_KEY must be exactly 64 hex chars (32 bytes), got %d bytes", len(key))
+		if persistEnvToFile && path != "" {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				if err := writeKeyFile(path, key); err != nil {
+					return nil, err
+				}
+				slog.Info("persisted SECRETS_MASTER_KEY to key file", "path", path)
+			}
 		}
 		return key, nil
 	}
 
 	if path == "" {
-		return nil, fmt.Errorf("master key required: set SECRETS_MASTER_KEY or --key-file")
+		return nil, fmt.Errorf("master key required: set SECRETS_MASTER_KEY or SECRETS_KEY_FILE")
 	}
 
-	if data, err := os.ReadFile(path); err == nil {
-		key, err := hex.DecodeString(strings.TrimSpace(string(data)))
-		if err != nil {
-			return nil, fmt.Errorf("key file must contain hex-encoded 32 bytes: %w", err)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("key file %q does not exist", path)
 		}
-		if len(key) != 32 {
-			return nil, fmt.Errorf("key file must contain exactly 64 hex chars (32 bytes), got %d bytes", len(key))
-		}
-		slog.Info("master key loaded from file", "path", path)
-		return key, nil
+		return nil, fmt.Errorf("read key file: %w", err)
 	}
 
+	key, err := decodeHexKey(strings.TrimSpace(string(data)), "key file")
+	if err != nil {
+		return nil, err
+	}
+	slog.Info("master key loaded from file", "path", path)
+	return key, nil
+}
+
+func decodeHexKey(raw, label string) ([]byte, error) {
+	key, err := hex.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be hex-encoded 32 bytes: %w", label, err)
+	}
+	if len(key) != 32 {
+		return nil, fmt.Errorf("%s must be exactly 64 hex chars (32 bytes), got %d bytes", label, len(key))
+	}
+	return key, nil
+}
+
+func writeKeyFile(path string, key []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return nil, fmt.Errorf("create key dir: %w", err)
+		return fmt.Errorf("create key dir: %w", err)
 	}
-
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		return nil, fmt.Errorf("generate master key: %w", err)
-	}
-
 	encoded := hex.EncodeToString(key)
 	if err := os.WriteFile(path, []byte(encoded+"\n"), 0600); err != nil {
-		return nil, fmt.Errorf("write key file: %w", err)
+		return fmt.Errorf("write key file: %w", err)
 	}
-	slog.Info("generated new master key", "path", path)
-	return key, nil
+	return nil
+}
+
+func (m *Module) rotateMasterKey() error {
+	m.cfgMu.Lock()
+	defer m.cfgMu.Unlock()
+
+	if m.vault == nil {
+		return fmt.Errorf("vault not initialized")
+	}
+	if m.keyFile == "" {
+		return fmt.Errorf("key_file must be configured for rotation")
+	}
+	if err := validateStoragePath(m.allowedRoot, m.keyFile); err != nil {
+		return err
+	}
+
+	newKey := make([]byte, 32)
+	if _, err := rand.Read(newKey); err != nil {
+		return fmt.Errorf("generate master key: %w", err)
+	}
+	if err := m.vault.RotateKey(newKey); err != nil {
+		return fmt.Errorf("rotate vault keys: %w", err)
+	}
+	if err := writeKeyFile(m.keyFile, newKey); err != nil {
+		return fmt.Errorf("write rotated key file: %w", err)
+	}
+	for i := range newKey {
+		newKey[i] = 0
+	}
+	slog.Info("master key rotated", "path", m.keyFile)
+	return nil
 }

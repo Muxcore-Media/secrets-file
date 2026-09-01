@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync/atomic"
 
@@ -40,14 +41,24 @@ func (s *Server) RegisterWithGRPC(srv *grpc.Server) {
 	secretsv1.RegisterSecretsServiceServer(srv, s)
 }
 
+func (s *Server) Health(ctx context.Context) error {
+	return s.vault().VerifyAll(ctx)
+}
+
 func (s *Server) Get(ctx context.Context, req *secretsv1.GetRequest) (*secretsv1.GetResponse, error) {
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
 	val, err := s.vault().Get(ctx, req.GetKey())
 	if err != nil {
-		slog.Error("secrets: get failed", "key", req.GetKey(), "error", err)
-		return nil, status.Error(codes.NotFound, err.Error())
+		if errors.Is(err, vault.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "secret not found")
+		}
+		if errors.Is(err, vault.ErrEmptyKey) {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		slog.Error("secrets: get failed", "error", err)
+		return nil, status.Error(codes.FailedPrecondition, "decrypt failed")
 	}
 	s.getCount.Add(1)
 	return &secretsv1.GetResponse{Key: req.GetKey(), Value: val}, nil
@@ -58,7 +69,7 @@ func (s *Server) Set(ctx context.Context, req *secretsv1.SetRequest) (*secretsv1
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
 	if err := s.vault().Set(ctx, req.GetKey(), req.GetValue()); err != nil {
-		slog.Error("secrets: set failed", "key", req.GetKey(), "error", err)
+		slog.Error("secrets: set failed", "error", err)
 		return nil, status.Error(codes.Internal, "set failed")
 	}
 	s.setCount.Add(1)
@@ -70,7 +81,7 @@ func (s *Server) Delete(ctx context.Context, req *secretsv1.DeleteRequest) (*sec
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
 	if err := s.vault().Delete(ctx, req.GetKey()); err != nil {
-		slog.Error("secrets: delete failed", "key", req.GetKey(), "error", err)
+		slog.Error("secrets: delete failed", "error", err)
 		return nil, status.Error(codes.Internal, "delete failed")
 	}
 	s.delCount.Add(1)

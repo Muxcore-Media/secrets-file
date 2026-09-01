@@ -13,8 +13,9 @@ Pre-1.0 beta software. APIs and interfaces are not yet stable.
 
 ## Reporting a Vulnerability
 
-**Do not open a public issue.** Report via GitHub Security Advisories:
-https://github.com/Muxcore-Media/secrets-file/security/advisories
+**Do not open a public issue.** Report privately via Forgejo:
+
+https://git.zem.systems/muxcore/secrets-file/issues (mark confidential) or email the maintainer.
 
 Acknowledgment within **72 hours**. Target patch: **7 days** critical, **30 days** moderate.
 
@@ -23,7 +24,7 @@ Acknowledgment within **72 hours**. Target patch: **7 days** critical, **30 days
 1. Reporter submits private report
 2. Maintainers triage within 72 hours, assign severity
 3. Fix developed in private fork; reporter credited (with permission)
-4. GitHub Security Advisory published with fix release
+4. Advisory published with fix release
 
 ## Safe Harbor
 

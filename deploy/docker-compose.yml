@@ -15,15 +15,21 @@ services:
 
   secrets-file:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
-    ports:
-      - "9550"
+    volumes:
+      - secrets-data:/var/lib/secrets-file
     environment:
       MUXCORE_GRPC_ADDR: core:9090
       MUXCORE_INSECURE_DISABLE_TLS: "true"
       MUXCORE_LOG_LEVEL: debug
       MUXCORE_MODULE_ID: secrets-file
+      SECRETS_STORE: /var/lib/secrets-file/secrets.json
+      SECRETS_KEY_FILE: /var/lib/secrets-file/master.key
+      SECRETS_GRPC_ADDR: 127.0.0.1:9550
     depends_on:
       core:
         condition: service_healthy
+
+volumes:
+  secrets-data:

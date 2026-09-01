@@ -7,6 +7,10 @@ Wants=network-online.target
 Type=simple
 User=muxcore
 Group=muxcore
+StateDirectory=secrets-file
+Environment=SECRETS_STORE=/var/lib/secrets-file/secrets.json
+Environment=SECRETS_KEY_FILE=/var/lib/secrets-file/master.key
+Environment=SECRETS_GRPC_ADDR=127.0.0.1:9550
 ExecStart=/usr/local/bin/secrets-file \
   --muxcore-mesh-addr localhost:9090 \
   --muxcore-module-id secrets-file

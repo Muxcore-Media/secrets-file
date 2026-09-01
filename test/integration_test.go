@@ -4,54 +4,85 @@ package test
 
 import (
 	"context"
-	"os"
+	"net"
 	"testing"
-	"time"
 
-	modulev1 "github.com/Muxcore-Media/core/proto/gen/muxcore/module/v1"
+	secretsv1 "github.com/Muxcore-Media/core/proto/gen/muxcore/secrets/v1"
+	"github.com/Muxcore-Media/secrets-file/internal/server"
+	"github.com/Muxcore-Media/secrets-file/internal/vault"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/test/bufconn"
 )
 
-func TestModuleRegistration(t *testing.T) {
-	addr := os.Getenv("MUXCORE_GRPC_ADDR")
-	if addr == "" {
-		t.Skip("MUXCORE_GRPC_ADDR not set")
+func startSecretsService(t *testing.T) (secretsv1.SecretsServiceClient, func()) {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 3)
 	}
+	v, err := vault.New("", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := server.New(v)
+	lis := bufconn.Listen(1 << 20)
+	grpcSrv := grpc.NewServer()
+	srv.RegisterWithGRPC(grpcSrv)
+	go func() { _ = grpcSrv.Serve(lis) }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, addr,
+	conn, err := grpc.NewClient("passthrough:///bufconn",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return lis.DialContext(ctx)
+		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
-		t.Fatalf("dial core: %v", err)
+		t.Fatal(err)
 	}
-	defer conn.Close()
+	client := secretsv1.NewSecretsServiceClient(conn)
+	cleanup := func() {
+		grpcSrv.Stop()
+		_ = conn.Close()
+	}
+	return client, cleanup
+}
 
-	reg := modulev1.NewModuleRegistrationClient(conn)
-	resp, err := reg.Register(ctx, &modulev1.RegisterRequest{
-		ModuleId: "test-module",
-		ModuleInfo: &modulev1.ModuleInfo{
-			Id:           "test-module",
-			Name:         "Test Module",
-			Version:      "0.0.0-test",
-			Roles:        []string{"test"},
-			Capabilities: []string{"test"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	if !resp.Accepted {
-		t.Fatalf("registration rejected: %s", resp.Error)
-	}
-	t.Logf("registered, mesh_addr=%s node_id=%s", resp.MeshAddr, resp.NodeId)
+func TestSecretsServiceCRUD(t *testing.T) {
+	client, cleanup := startSecretsService(t)
+	defer cleanup()
 
-	_, err = reg.Unregister(ctx, &modulev1.UnregisterRequest{ModuleId: "test-module"})
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-caller-id", "integration-test"))
+
+	if _, err := client.Set(ctx, &secretsv1.SetRequest{Key: "db", Value: "postgres://x"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := client.Get(ctx, &secretsv1.GetRequest{Key: "db"})
 	if err != nil {
-		t.Fatalf("unregister: %v", err)
+		t.Fatal(err)
+	}
+	if got.GetValue() != "postgres://x" {
+		t.Fatalf("got %q", got.GetValue())
+	}
+
+	list, err := client.List(ctx, &secretsv1.ListRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.GetCount() != 1 {
+		t.Fatalf("count=%d", list.GetCount())
+	}
+
+	if _, err := client.Delete(ctx, &secretsv1.DeleteRequest{Key: "db"}); err != nil {
+		t.Fatal(err)
+	}
+	list, err = client.List(ctx, &secretsv1.ListRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.GetCount() != 0 {
+		t.Fatalf("count=%d after delete", list.GetCount())
 	}
 }

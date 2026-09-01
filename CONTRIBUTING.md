@@ -10,7 +10,7 @@
 ### Clone and build
 
 ```bash
-git clone https://github.com/Muxcore-Media/secrets-file.git
+git clone ssh://forgejo@git.zem.systems:2222/muxcore/secrets-file.git
 cd secrets-file
 go build -o secrets-file ./cmd/module
 ```
@@ -23,6 +23,9 @@ cd ../core
 MUXCORE_INSECURE_DISABLE_TLS=true ./muxcored
 
 # Terminal 2: start module
+export SECRETS_MASTER_KEY="$(openssl rand -hex 32)"
+export SECRETS_KEY_FILE=/tmp/secrets-file-master.key
+export SECRETS_STORE=/tmp/secrets-file.json
 go build -o secrets-file ./cmd/module
 ./secrets-file --muxcore-mesh-addr localhost:9090
 ```
