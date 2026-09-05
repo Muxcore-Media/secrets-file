@@ -13,9 +13,11 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/Muxcore-Media/core/pkg/contracts"
 	modulesdk "github.com/Muxcore-Media/core/sdk/go/module"
+	"github.com/Muxcore-Media/secrets-file/internal/grpctls"
 	"github.com/Muxcore-Media/secrets-file/internal/server"
 	"github.com/Muxcore-Media/secrets-file/internal/vault"
 )
@@ -48,7 +50,7 @@ func NewModule(cfg Config) *Module {
 		cfg.Store = "secrets.json"
 	}
 	if cfg.GRPCAddr == "" {
-		cfg.GRPCAddr = ":9550"
+		cfg.GRPCAddr = "127.0.0.1:9550"
 	}
 	if v := os.Getenv("SECRETS_STORE"); v != "" {
 		cfg.Store = v
@@ -104,7 +106,21 @@ func (m *Module) Init(ctx context.Context) error {
 }
 
 func (m *Module) Start(ctx context.Context) error {
-	m.grpcSrv = grpc.NewServer()
+	var grpcOpts []grpc.ServerOption
+	tlsCfg, err := grpctls.ServerConfig(m.store)
+	if err != nil {
+		return fmt.Errorf("gRPC TLS: %w", err)
+	}
+	if tlsCfg != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))
+		slog.Info("secrets-file gRPC TLS enabled", "addr", m.grpcAddr)
+	} else {
+		slog.Warn("secrets-file gRPC listening without TLS (dev only)",
+			"addr", m.grpcAddr,
+			"hint", "unset MUXCORE_INSECURE_DISABLE_TLS for production",
+		)
+	}
+	m.grpcSrv = grpc.NewServer(grpcOpts...)
 	m.srv.RegisterWithGRPC(m.grpcSrv)
 	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 

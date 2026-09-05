@@ -27,7 +27,9 @@ Each secret is stored as `{"n": <nonce>, "d": <ciphertext>}`. The master key nev
 | `SECRETS_MASTER_KEY` | `` | Hex-encoded 32-byte master key (takes precedence) |
 | `SECRETS_KEY_FILE` | `` | Path to hex-encoded master key file (auto-created if missing) |
 | `SECRETS_STORE` | `secrets.json` | Encrypted secrets store path |
-| `SECRETS_GRPC_ADDR` | `:9550` | gRPC listen address |
+| `SECRETS_GRPC_ADDR` | `127.0.0.1:9550` | gRPC listen address (loopback by default) |
+
+gRPC uses **TLS by default**. Auto-generated dev certificates are stored alongside the secrets store (or under `SECRETS_TLS_DIR`). Set `MUXCORE_INSECURE_DISABLE_TLS=true` for plaintext dev only. Override certs with `MUXCORE_TLS_CERT` / `MUXCORE_TLS_KEY` or `SECRETS_TLS_CERT` / `SECRETS_TLS_KEY`.
 
 ---
 

@@ -19,11 +19,14 @@ func TestModuleInfo(t *testing.T) {
 }
 
 func TestModuleLifecycle(t *testing.T) {
+	t.Setenv("MUXCORE_INSECURE_DISABLE_TLS", "")
+	t.Setenv("MUXCORE_GRPC_INSECURE", "")
+
 	dir := t.TempDir()
 	m := NewModule(Config{
 		KeyFile:  filepath.Join(dir, "master.key"),
 		Store:    filepath.Join(dir, "secrets.json"),
-		GRPCAddr: ":0",
+		GRPCAddr: "127.0.0.1:0",
 	})
 	ctx := context.Background()
 
@@ -39,10 +42,13 @@ func TestModuleLifecycle(t *testing.T) {
 }
 
 func TestKeyAndStorePermissions(t *testing.T) {
+	t.Setenv("MUXCORE_INSECURE_DISABLE_TLS", "")
+	t.Setenv("MUXCORE_GRPC_INSECURE", "")
+
 	dir := t.TempDir()
 	keyFile := filepath.Join(dir, "master.key")
 	store := filepath.Join(dir, "secrets.json")
-	m := NewModule(Config{KeyFile: keyFile, Store: store, GRPCAddr: ":0"})
+	m := NewModule(Config{KeyFile: keyFile, Store: store, GRPCAddr: "127.0.0.1:0"})
 	ctx := context.Background()
 	if err := m.Init(ctx); err != nil {
 		t.Fatal(err)
