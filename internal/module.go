@@ -17,6 +17,7 @@ import (
 
 	"github.com/Muxcore-Media/core/pkg/contracts"
 	modulesdk "github.com/Muxcore-Media/core/sdk/go/module"
+	manifest "github.com/Muxcore-Media/secrets-file"
 	"github.com/Muxcore-Media/secrets-file/internal/grpctls"
 	"github.com/Muxcore-Media/secrets-file/internal/server"
 	"github.com/Muxcore-Media/secrets-file/internal/vault"
@@ -73,7 +74,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Secrets File Vault",
-		Version:      "0.1.6",
+		Version:      modulesdk.ManifestVersion(manifest.ManifestJSON),
 		Roles:        []string{"security"},
 		Description:  "AES-256-GCM encrypted file-backed secrets vault",
 		Author:       "MuxCore",
